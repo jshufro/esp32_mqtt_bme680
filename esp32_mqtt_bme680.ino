@@ -126,12 +126,6 @@ setup_wifi(void)
   }
 }
 
-void
-mqtt_event_handler(esp_mqtt_event_id_t event, void *data)
-{
-  PRINT("MQTT EVENT");
-}
-
 esp_mqtt_client_handle_t
 setup_mqtt()
 {
