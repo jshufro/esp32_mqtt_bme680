@@ -157,7 +157,7 @@ void
 setup() {
   Serial.begin(SERIAL_SPEED);
   pinMode(LED_BUILTIN, OUTPUT);
-  PRINT("Starting ESP23 Thing I2C-MQTT Environmental Sensor.");
+  PRINT("Starting ESP32 Thing I2C-MQTT Environmental Sensor.");
   setup_BME680();
   setup_wifi();
   mqttc = setup_mqtt();
@@ -178,13 +178,12 @@ void
 mqtt_publish(void)
 {
   char buf[32];
+  PRINTF("Publishing to MQTT broker... soft errors %d", soft_errors);
 
   /* Temperature */
 #ifdef CONVERT_TO_FAHRENHEIT
-  temp = ((temp / 5) * 9) + 3200;
+  temp = ((temp * 9) / 5) + 3200;
 #endif
-  PRINTF("Publishing to MQTT broker... soft errors %d", soft_errors);
-  
   snprintf(buf, sizeof(buf), "%d.%02d", temp / 100, temp % 100);
   soft_errors += esp_mqtt_client_publish(mqttc, MQTT_TOPIC "/temp", buf, strlen(buf), 1, 0) == 0;
 
@@ -210,8 +209,7 @@ loop()
     PRINT("WARNING - encountered 10 non-fatal errors since reset, resetting");
     ESP.restart();
   }
-
-  PRINT("Starting ESP23 Thing I2C-MQTT Environmental Sensor.");
+  PRINT("ESP32 Thing I2C-MQTT Environmental Sensor Main Loop.");
   BME680.getSensorData(temp,humidity,pressure,gas,true);
   PRINTF("Temp: %d celsius, humidity: %d percent, pressure: %d Pascals, gas: %d ohms", temp, humidity / 1000, pressure, gas);
   mqtt_publish();
