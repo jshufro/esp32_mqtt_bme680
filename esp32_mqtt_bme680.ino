@@ -147,6 +147,7 @@ setup_mqtt()
     goto error;
   }
 
+  delay(1000);
   snprintf(buf, sizeof(buf), "connected");
   esp_mqtt_client_publish(out, mqtt_config.lwt_topic, buf, strlen(buf), 1, 0);
   return out;
