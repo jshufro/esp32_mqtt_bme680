@@ -130,8 +130,9 @@ esp_mqtt_client_handle_t
 setup_mqtt()
 {
   esp_mqtt_client_handle_t out;
+  char buf[32];
   
-  PRINT("- Initializing MQTT CLient");
+  PRINT("- Initializing MQTT Client");
   mqtt_config.uri = MQTT_URI;
   mqtt_config.lwt_qos = MQTT_LWT_QOS;
   mqtt_config.lwt_msg = "disconnected";
@@ -145,6 +146,9 @@ setup_mqtt()
     PRINT("CRITICAL - couldn't start MQTT client.");
     goto error;
   }
+
+  snprintf(buf, sizeof(buf), "connected");
+  esp_mqtt_client_publish(out, mqtt_config.lwt_topic, buf, strlen(buf), 1, 0);
   return out;
   
 error:
