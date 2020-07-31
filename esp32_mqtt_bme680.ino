@@ -23,7 +23,9 @@
 #define MQTT_URI "mqtt://192.168.1.1:1883"
 /* OPTIONAL */ 
 #define MQTT_LWT_QOS 2
-#define MQTT_LWT_RETAIN 0
+#define MQTT_LWT_RETAIN 1
+#define MQTT_RETAIN 0
+#define MQTT_QOS 1
 
 /* CONFIG general */
 #define DEBUG 1
@@ -137,6 +139,7 @@ setup_mqtt()
   mqtt_config.lwt_qos = MQTT_LWT_QOS;
   mqtt_config.lwt_msg = "disconnected";
   mqtt_config.lwt_topic = MQTT_TOPIC "/lwt";
+  mqtt_config.lwt_retain = MQTT_LWT_RETAIN;
   out = esp_mqtt_client_init(&mqtt_config);
   if (out == NULL) {
     PRINT("CRITICAL - couldn't create MQTT client.");
@@ -149,7 +152,7 @@ setup_mqtt()
 
   delay(1000);
   snprintf(buf, sizeof(buf), "connected");
-  esp_mqtt_client_publish(out, mqtt_config.lwt_topic, buf, strlen(buf), 1, 0);
+  esp_mqtt_client_publish(out, mqtt_config.lwt_topic, buf, strlen(buf), MQTT_LWT_QOS, MQTT_LWT_RETAIN);
   return out;
   
 error:
@@ -190,19 +193,19 @@ mqtt_publish(void)
   temp = ((temp * 9) / 5) + 3200;
 #endif
   snprintf(buf, sizeof(buf), "%d.%02d", temp / 100, temp % 100);
-  soft_errors += esp_mqtt_client_publish(mqttc, MQTT_TOPIC "/temp", buf, strlen(buf), 1, 0) == 0;
+  soft_errors += esp_mqtt_client_publish(mqttc, MQTT_TOPIC "/temp", buf, strlen(buf), MQTT_QOS, MQTT_RETAIN) == 0;
 
   /* humidity */
   snprintf(buf, sizeof(buf), "%d.%02d", humidity / 1000, (humidity % 1000)/10);
-  soft_errors += esp_mqtt_client_publish(mqttc, MQTT_TOPIC "/humidity", buf, strlen(buf), 1, 0) == 0;
+  soft_errors += esp_mqtt_client_publish(mqttc, MQTT_TOPIC "/humidity", buf, strlen(buf), MQTT_QOS, MQTT_RETAIN) == 0;
 
   /* pressure */
   snprintf(buf, sizeof(buf), "%d", pressure);
-  soft_errors += esp_mqtt_client_publish(mqttc, MQTT_TOPIC "/pressure", buf, strlen(buf), 1, 0) == 0;
+  soft_errors += esp_mqtt_client_publish(mqttc, MQTT_TOPIC "/pressure", buf, strlen(buf), MQTT_QOS, MQTT_RETAIN) == 0;
 
   /* gas */
   snprintf(buf, sizeof(buf), "%d", gas);
-  soft_errors += esp_mqtt_client_publish(mqttc, MQTT_TOPIC "/gas", buf, strlen(buf), 1, 0) == 0;
+  soft_errors += esp_mqtt_client_publish(mqttc, MQTT_TOPIC "/gas", buf, strlen(buf), MQTT_QOS, MQTT_RETAIN) == 0;
 
   PRINTF("Finished publishing... soft errors %d", soft_errors);
 }
