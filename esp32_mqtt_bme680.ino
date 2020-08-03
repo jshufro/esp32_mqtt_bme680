@@ -27,6 +27,9 @@
 #define MQTT_RETAIN 0
 #define MQTT_QOS 1
 
+/* CONFIG Liquid Sensor */
+#define LIQUID_SENSOR_GPIO GPIO_NUM_34
+
 /* CONFIG general */
 #define DEBUG 1
 #define BME680_ATTEMPTS 5U
@@ -129,7 +132,7 @@ setup_wifi(void)
 }
 
 esp_mqtt_client_handle_t
-setup_mqtt()
+setup_mqtt(void)
 {
   esp_mqtt_client_handle_t out;
   char buf[32];
@@ -160,11 +163,18 @@ error:
   __builtin_unreachable();
 }
 
+void
+setup_liquid_sensor(void)
+{
+  pinMode(LIQUID_SENSOR_GPIO, INPUT);
+}
+
 static esp_mqtt_client_handle_t mqttc;
 void
 setup() {
   Serial.begin(SERIAL_SPEED);
   pinMode(LED_BUILTIN, OUTPUT);
+  setup_liquid_sensor();
   PRINT("Starting ESP32 Thing I2C-MQTT Environmental Sensor.");
   setup_BME680();
   setup_wifi();
@@ -206,6 +216,10 @@ mqtt_publish(void)
   /* gas */
   snprintf(buf, sizeof(buf), "%d", gas);
   soft_errors += esp_mqtt_client_publish(mqttc, MQTT_TOPIC "/gas", buf, strlen(buf), MQTT_QOS, MQTT_RETAIN) == 0;
+
+  /* wet/dry */
+  snprintf(buf, sizeof(buf), "%s", digitalRead(LIQUID_SENSOR_GPIO) == 1 ? "dry" : "wet");
+  soft_errors += esp_mqtt_client_publish(mqttc, MQTT_TOPIC "/liquid", buf, strlen(buf), MQTT_QOS, MQTT_RETAIN) == 0;
 
   PRINTF("Finished publishing... soft errors %d", soft_errors);
 }
