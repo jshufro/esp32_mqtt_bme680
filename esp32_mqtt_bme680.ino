@@ -33,11 +33,13 @@
 #define CONVERT_TO_FAHRENHEIT //Comment this out for Celsius
 #define INTERVAL 60000 //Milliseconds between measurements/publishings.
 #define SERIAL_SPEED 115200
+#define WDT_TIMEOUT 120
 /* ---------- END of configuration area ---------- */
 
 
 #include "Zanshin_BME680.h"
 #include <WiFi.h>
+#include <esp_task_wdt.h>
 #include "mqtt_client.h"
 
 #define STR(X) #X
@@ -169,6 +171,9 @@ setup() {
   setup_BME680();
   setup_wifi();
   mqttc = setup_mqtt();
+  // Setup the watchdog timer
+  esp_task_wdt_init(WDT_TIMEOUT, true);
+  esp_task_wdt_add(NULL);
   PRINT("Setup done\n");
 
   /* Turn on the LED to indicate that the setup was successful. */
@@ -208,6 +213,9 @@ mqtt_publish(void)
   soft_errors += esp_mqtt_client_publish(mqttc, MQTT_TOPIC "/gas", buf, strlen(buf), MQTT_QOS, MQTT_RETAIN) == 0;
 
   PRINTF("Finished publishing... soft errors %d", soft_errors);
+
+  // Feed the watchdog!
+  esp_task_wdt_reset();
 }
 
 void
