@@ -33,7 +33,7 @@
 #define CONVERT_TO_FAHRENHEIT //Comment this out for Celsius
 #define INTERVAL 60000 //Milliseconds between measurements/publishings.
 #define SERIAL_SPEED 115200
-#define WDT_TIMEOUT 120
+#define WDT_TIMEOUT (INTERVAL / 1000) * 2 // Resets if we don't publish at least 1 datum every 2 intervals
 /* ---------- END of configuration area ---------- */
 
 
@@ -44,6 +44,7 @@
 
 #define STR(X) #X
 #ifdef DEBUG
+#include "freertos/FreeRTOS.h"
 #define PRINT(X) Serial.print(F(X "\n"))
 #define PRINTF(X, ...) Serial.printf(X "\n", __VA_ARGS__)
 #else
@@ -54,7 +55,6 @@
 
 BME680_Class BME680;
 esp_mqtt_client_config_t mqtt_config = {};
-static uint8_t soft_errors = 0;
 
 void
 flash_led(void)
@@ -130,6 +130,31 @@ setup_wifi(void)
   }
 }
 
+int
+mqtt_event_handler(esp_mqtt_event_t *event)
+{
+
+  if (event == NULL) {
+    return 0;
+  }
+
+  switch(event->event_id) {
+    default:
+      return 0;
+    case MQTT_EVENT_BEFORE_CONNECT:
+      // Add current task to task watchdog timer
+      PRINTF("Adding watchdog for task %s", pcTaskGetTaskName(NULL));
+      esp_task_wdt_add(NULL);
+      break;
+    case MQTT_EVENT_PUBLISHED:
+      // Feed the watchdog every time we publish data. That means we're doing well.
+      PRINTF("Feeding the watchdog for task %s", pcTaskGetTaskName(NULL));
+      esp_task_wdt_reset();
+      break;
+  }
+  return 0;
+}
+
 esp_mqtt_client_handle_t
 setup_mqtt()
 {
@@ -142,6 +167,7 @@ setup_mqtt()
   mqtt_config.lwt_msg = "disconnected";
   mqtt_config.lwt_topic = MQTT_TOPIC "/lwt";
   mqtt_config.lwt_retain = MQTT_LWT_RETAIN;
+  mqtt_config.event_handle = mqtt_event_handler;
   out = esp_mqtt_client_init(&mqtt_config);
   if (out == NULL) {
     PRINT("CRITICAL - couldn't create MQTT client.");
@@ -173,6 +199,7 @@ setup() {
   mqttc = setup_mqtt();
   // Setup the watchdog timer
   esp_task_wdt_init(WDT_TIMEOUT, true);
+  PRINTF("Adding watchdog for task %s", pcTaskGetTaskName(NULL));
   esp_task_wdt_add(NULL);
   PRINT("Setup done\n");
 
@@ -191,43 +218,38 @@ void
 mqtt_publish(void)
 {
   char buf[32];
-  PRINTF("Publishing to MQTT broker... soft errors %d", soft_errors);
+  PRINT("Publishing to MQTT broker.");
 
   /* Temperature */
 #ifdef CONVERT_TO_FAHRENHEIT
   temp = ((temp * 9) / 5) + 3200;
 #endif
   snprintf(buf, sizeof(buf), "%d.%02d", temp / 100, temp % 100);
-  soft_errors += esp_mqtt_client_publish(mqttc, MQTT_TOPIC "/temp", buf, strlen(buf), MQTT_QOS, MQTT_RETAIN) == 0;
+  esp_mqtt_client_publish(mqttc, MQTT_TOPIC "/temp", buf, strlen(buf), MQTT_QOS, MQTT_RETAIN);
 
   /* humidity */
   snprintf(buf, sizeof(buf), "%d.%02d", humidity / 1000, (humidity % 1000)/10);
-  soft_errors += esp_mqtt_client_publish(mqttc, MQTT_TOPIC "/humidity", buf, strlen(buf), MQTT_QOS, MQTT_RETAIN) == 0;
+  esp_mqtt_client_publish(mqttc, MQTT_TOPIC "/humidity", buf, strlen(buf), MQTT_QOS, MQTT_RETAIN);
 
   /* pressure */
   snprintf(buf, sizeof(buf), "%d", pressure);
-  soft_errors += esp_mqtt_client_publish(mqttc, MQTT_TOPIC "/pressure", buf, strlen(buf), MQTT_QOS, MQTT_RETAIN) == 0;
+  esp_mqtt_client_publish(mqttc, MQTT_TOPIC "/pressure", buf, strlen(buf), MQTT_QOS, MQTT_RETAIN);
 
   /* gas */
   snprintf(buf, sizeof(buf), "%d", gas);
-  soft_errors += esp_mqtt_client_publish(mqttc, MQTT_TOPIC "/gas", buf, strlen(buf), MQTT_QOS, MQTT_RETAIN) == 0;
+  esp_mqtt_client_publish(mqttc, MQTT_TOPIC "/gas", buf, strlen(buf), MQTT_QOS, MQTT_RETAIN);
 
-  PRINTF("Finished publishing... soft errors %d", soft_errors);
-
-  // Feed the watchdog!
-  esp_task_wdt_reset();
+  PRINT("Finished publishing.");
 }
 
 void
 loop()
 {
-  if (soft_errors >= 10) {
-    PRINT("WARNING - encountered 10 non-fatal errors since reset, resetting");
-    ESP.restart();
-  }
   PRINT("ESP32 Thing I2C-MQTT Environmental Sensor Main Loop.");
   BME680.getSensorData(temp,humidity,pressure,gas,true);
   PRINTF("Temp: %d celsius, humidity: %d percent, pressure: %d Pascals, gas: %d ohms", temp, humidity / 1000, pressure, gas);
   mqtt_publish();
+  PRINTF("Feeding the watchdog for task %s", pcTaskGetTaskName(NULL));
+  esp_task_wdt_reset();
   delay(INTERVAL);
 }
