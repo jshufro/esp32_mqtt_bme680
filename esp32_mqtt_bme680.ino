@@ -133,6 +133,8 @@ setup_wifi(void)
 int
 mqtt_event_handler(esp_mqtt_event_t *event)
 {
+  char buf[32];
+  static __thread bool wdt_added = false;
 
   if (event == NULL) {
     return 0;
@@ -142,15 +144,22 @@ mqtt_event_handler(esp_mqtt_event_t *event)
     default:
       return 0;
     case MQTT_EVENT_BEFORE_CONNECT:
-      // Add current task to task watchdog timer
-      PRINTF("Adding watchdog for task %s", pcTaskGetTaskName(NULL));
-      esp_task_wdt_add(NULL);
+      if (!wdt_added) {
+        wdt_added = true;
+        // Add current task to task watchdog timer
+        PRINTF("Adding watchdog for task %s", pcTaskGetTaskName(NULL));
+        esp_task_wdt_add(NULL);
+      }
       break;
     case MQTT_EVENT_PUBLISHED:
       // Feed the watchdog every time we publish data. That means we're doing well.
       PRINTF("Feeding the watchdog for task %s", pcTaskGetTaskName(NULL));
       esp_task_wdt_reset();
       break;
+    case MQTT_EVENT_CONNECTED:
+      // Tell subscribers we're here
+      snprintf(buf, sizeof(buf), "connected");
+      esp_mqtt_client_publish(event->client, mqtt_config.lwt_topic, buf, strlen(buf), MQTT_LWT_QOS, MQTT_LWT_RETAIN);
   }
   return 0;
 }
@@ -159,7 +168,6 @@ esp_mqtt_client_handle_t
 setup_mqtt()
 {
   esp_mqtt_client_handle_t out;
-  char buf[32];
   
   PRINT("- Initializing MQTT Client");
   mqtt_config.uri = MQTT_URI;
@@ -178,9 +186,8 @@ setup_mqtt()
     goto error;
   }
 
+  // Short delay on startup to allow mqtt background threads to connect
   delay(1000);
-  snprintf(buf, sizeof(buf), "connected");
-  esp_mqtt_client_publish(out, mqtt_config.lwt_topic, buf, strlen(buf), MQTT_LWT_QOS, MQTT_LWT_RETAIN);
   return out;
   
 error:
